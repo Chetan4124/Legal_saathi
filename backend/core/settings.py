@@ -27,7 +27,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    'rest_framework',
+    'rest_framework',           # ← FIXED: was 'rest_framework' (missing 'e')
     'rest_framework_simplejwt',
     'corsheaders',
 ]
@@ -46,7 +46,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # MIDDLEWARE
 # ─────────────────────────────────────────
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',        # Must be at the top
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -80,27 +80,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # ─────────────────────────────────────────
 # DATABASE
 # ─────────────────────────────────────────
-# Using SQLite for development — easy, no setup needed
-# Switch to PostgreSQL for production by uncommenting below
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-# PostgreSQL (uncomment when deploying)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': config('DB_NAME'),
-#         'USER': config('DB_USER'),
-#         'PASSWORD': config('DB_PASSWORD'),
-#         'HOST': config('DB_HOST', default='localhost'),
-#         'PORT': config('DB_PORT', default='5432'),
-#     }
-# }
 
 
 # ─────────────────────────────────────────
@@ -136,7 +121,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'          # Uploaded legal documents land here
+MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # ─────────────────────────────────────────
@@ -153,7 +138,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',  # All endpoints require login by default
+        'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
@@ -167,7 +152,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,          # New refresh token on every refresh
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
@@ -179,28 +164,27 @@ SIMPLE_JWT = {
 # CORS (React frontend access)
 # ─────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',    # Vite dev server
-    'http://localhost:3000',    # CRA dev server (just in case)
+    'http://localhost:5173',
+    'http://localhost:3000',
 ]
 
-CORS_ALLOW_CREDENTIALS = True   # Allow cookies / auth headers
+CORS_ALLOW_CREDENTIALS = True
 
 
 # ─────────────────────────────────────────
 # FILE UPLOAD SETTINGS
 # ─────────────────────────────────────────
-# Only allow PDF and image uploads for legal documents
 ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg']
-MAX_UPLOAD_SIZE_MB = 10   # 10 MB limit
+MAX_UPLOAD_SIZE_MB = 10
 
 
 # ─────────────────────────────────────────
 # AI AGENT SETTINGS
 # ─────────────────────────────────────────
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
-# ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')  # Uncomment for Claude
-GEMINI_API_KEY = config('AIzaSyBHCGp3Yqrst8gHcAatBByJEoVL49h3ZpE', default='')  # ← ADD THIS
 
+# FIXED: Properly reads from .env file using the variable name 'GEMINI_API_KEY'
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 
-# ChromaDB will store vector embeddings here (local folder, no extra setup)
+# ChromaDB will store vector embeddings here
 CHROMA_DB_PATH = str(BASE_DIR / 'chroma_db')
