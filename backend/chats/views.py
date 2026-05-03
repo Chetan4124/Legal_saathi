@@ -110,3 +110,45 @@ class ChatClearView(APIView):
         clear_agent(document_id)
         
         return Response({'message': 'Chat history cleared'})
+class DocumentSummaryView(APIView):
+    """Generate AI summary for a document"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, document_id):
+        document = get_object_or_404(
+            Document,
+            id=document_id,
+            user=request.user
+        )
+        
+        if document.status != 'completed':
+            return Response(
+                {'error': 'Document processing not complete'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not document.extracted_text:
+            return Response(
+                {'error': 'No text extracted from document'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Use the agent to generate summary
+        agent = get_agent(document.id, document.extracted_text)
+        summary_prompt = (
+            "Please provide a structured summary of this legal document with the following sections:\n"
+            "1. Document Type: What type of legal document is this?\n"
+            "2. Parties Involved: Who are the parties mentioned?\n"
+            "3. Key Clauses: What are the main clauses or sections?\n"
+            "4. Important Dates: Any dates, deadlines, or timelines mentioned?\n"
+            "5. Key Obligations: What are the main obligations?\n"
+            "6. Risks/Concerns: Any potential legal risks or concerns?\n\n"
+            "Keep each section concise and clear."
+        )
+        
+        result = agent.ask(summary_prompt)
+        
+        return Response({
+            'summary': result['answer'],
+            'success': result.get('success', True)
+        })
