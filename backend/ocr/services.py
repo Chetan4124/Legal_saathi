@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-import easyocr
+
 from PIL import Image
 import io
 import os
