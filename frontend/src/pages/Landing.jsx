@@ -560,6 +560,13 @@ export default function Landing() {
           </motion.div>
         </div>
       </section>
+      // In the nav links section, add:
+<Link
+  to="/advisor/register"
+  className="text-sm font-medium text-gray-500 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+>
+  For Advisors
+</Link>
 
       {/* ──── FOOTER ──── */}
       <footer className="border-t bg-white py-12 dark:border-gray-800 dark:bg-gray-950">
