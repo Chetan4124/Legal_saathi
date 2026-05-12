@@ -4,7 +4,11 @@ import AppLayout from '../components/AppLayout';
 import api from '../api/axios';
 import { getDocumentSummary } from '../api/chats';
 import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+function Skeleton({ className }) {
+  return <div className={`animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800 ${className}`} />;
+}
 
 export default function DocumentDetail() {
   const { id } = useParams();
@@ -14,14 +18,13 @@ export default function DocumentDetail() {
   const [retrying, setRetrying] = useState(false);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState(false);
+  const [activeTab, setActiveTab] = useState('text');
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get(`/documents/${id}/`);
         setDoc(data);
-        // Auto-fetch summary if document is completed
         if (data?.status === 'completed' && data?.extracted_text) {
           fetchSummary();
         }
@@ -32,17 +35,15 @@ export default function DocumentDetail() {
         setLoading(false);
       }
     })();
-  }, [id, navigate]);
+  }, [id]);
 
   const fetchSummary = async () => {
     setSummaryLoading(true);
-    setSummaryError(false);
     try {
       const { data } = await getDocumentSummary(id);
       setSummary(data.summary);
     } catch (err) {
       console.error('Summary fetch error:', err);
-      setSummaryError(true);
     } finally {
       setSummaryLoading(false);
     }
@@ -51,8 +52,8 @@ export default function DocumentDetail() {
   const handleRetryOCR = async () => {
     setRetrying(true);
     try {
-      const { data } = await api.post(`/ocr/retry/${id}/`);
-      setDoc((prev) => ({ ...prev, status: data.status, extracted_text: data.extracted_text }));
+      await api.post(`/ocr/retry/${id}/`);
+      setDoc((prev) => ({ ...prev, status: 'processing' }));
       toast.success('OCR retry initiated');
     } catch {
       toast.error('OCR retry failed');
@@ -64,178 +65,205 @@ export default function DocumentDetail() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center py-20">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="max-w-6xl mx-auto space-y-8 animate-pulse">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-12 w-96" />
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <Skeleton className="h-96" />
+            </div>
+            <Skeleton className="h-64" />
+          </div>
         </div>
       </AppLayout>
     );
   }
 
+  const charCount = doc.extracted_text?.length || 0;
+  const wordCount = doc.extracted_text?.split(/\s+/).filter(Boolean).length || 0;
+
   return (
     <AppLayout>
-      {/* Breadcrumb */}
-      <div className="mb-6">
-        <Link to="/dashboard" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-          ← Back to Documents
-        </Link>
-      </div>
-
-      {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{doc.title}</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Uploaded {new Date(doc.uploaded_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          {doc.status === 'failed' && (
-            <button
-              onClick={handleRetryOCR}
-              disabled={retrying}
-              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 transition"
-            >
-              {retrying ? 'Retrying...' : 'Retry OCR'}
-            </button>
-          )}
-          {doc.status === 'completed' && (
-            <Link
-              to={`/chat/${doc.id}`}
-              className="rounded-xl bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700 transition"
-            >
-              💬 Chat with AI
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Status Badge */}
-      <div className="mb-6 flex items-center gap-2">
-        <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-          doc.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-          doc.status === 'processing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-          doc.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-          'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-        }`}>
-          {doc.status === 'completed' ? '✅' : doc.status === 'processing' ? '⚙️' : doc.status === 'failed' ? '❌' : '⏳'}
-          {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-        </span>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Extracted Text */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900"
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Breadcrumb + Title */}
+        <div className="space-y-4">
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition group"
           >
-            <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white">📄 Extracted Text</h2>
-            {doc.extracted_text ? (
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 dark:text-gray-300 max-h-96 overflow-y-auto">
-                {doc.extracted_text}
-              </pre>
-            ) : (
-              <p className="text-sm italic text-gray-400 dark:text-gray-500">
-                {doc.status === 'processing' ? 'OCR is still processing...' : 'No text extracted yet.'}
+            <svg className="h-4 w-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Documents
+          </Link>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <motion.h1
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-3xl font-bold text-gray-900 dark:text-white font-display"
+              >
+                {doc.title}
+              </motion.h1>
+              <p className="mt-1 text-sm text-gray-400">
+                Uploaded {new Date(doc.uploaded_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
-            )}
-          </motion.div>
-        </div>
-
-        {/* Sidebar — AI Summary */}
-        <div className="space-y-6">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">🤖 AI Summary</h2>
-              {summary && (
-                <button
-                  onClick={fetchSummary}
-                  className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  Refresh
-                </button>
-              )}
             </div>
 
-            {doc.status !== 'completed' ? (
-              <p className="text-sm text-gray-400 dark:text-gray-500">
-                Summary will be available once OCR is complete.
-              </p>
-            ) : summaryLoading ? (
-              <div className="space-y-3">
-                <div className="animate-pulse space-y-2">
-                  <div className="h-3 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="h-3 w-full rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="h-3 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="h-3 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
-                </div>
-                <p className="text-xs text-gray-400">Generating summary...</p>
-              </div>
-            ) : summaryError ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-red-500 mb-2">Failed to generate summary</p>
-                <button
-                  onClick={fetchSummary}
-                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  Try again
-                </button>
-              </div>
-            ) : summary ? (
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 dark:text-gray-300 max-h-[500px] overflow-y-auto">
-                  {summary}
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={fetchSummary}
-                className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
-              >
-                Generate Summary
-              </button>
-            )}
-          </motion.div>
+            <div className="flex items-center gap-3">
+              {/* Status Pill */}
+              <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${
+                doc.status === 'completed' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' :
+                doc.status === 'processing' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' :
+                doc.status === 'failed' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400' :
+                'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  doc.status === 'completed' ? 'bg-emerald-500' :
+                  doc.status === 'processing' ? 'bg-blue-500 animate-pulse' :
+                  doc.status === 'failed' ? 'bg-rose-500' : 'bg-gray-400'
+                }`} />
+                {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+              </span>
 
-          {/* Quick Stats */}
-          {doc.extracted_text && (
+              {doc.status === 'failed' && (
+                <button onClick={handleRetryOCR} disabled={retrying}
+                  className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition">
+                  {retrying ? 'Retrying...' : 'Retry OCR'}
+                </button>
+              )}
+              {doc.status === 'completed' && (
+                <Link to={`/chat/${doc.id}`}
+                  className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 transition">
+                  💬 Chat with AI
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-5">
+          {/* Main Content */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Tabs */}
+            <div className="flex gap-1 rounded-2xl bg-gray-100 dark:bg-gray-800 p-1">
+              {['text', 'stats'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+                    activeTab === tab
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {tab === 'text' ? '📄 Extracted Text' : '📊 Statistics'}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <AnimatePresence mode="wait">
+              {activeTab === 'text' ? (
+                <motion.div
+                  key="text"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden"
+                >
+                  {doc.extracted_text ? (
+                    <div className="p-8">
+                      <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-600 dark:text-gray-300 font-sans max-h-[600px] overflow-y-auto">
+                        {doc.extracted_text}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center">
+                      <span className="text-4xl">📭</span>
+                      <p className="mt-3 text-gray-400">
+                        {doc.status === 'processing' ? 'AI is reading your document...' : 'No text extracted yet.'}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="stats"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="grid grid-cols-2 gap-4"
+                >
+                  {[
+                    { label: 'Characters', value: charCount.toLocaleString(), icon: '🔤' },
+                    { label: 'Words', value: wordCount.toLocaleString(), icon: '📝' },
+                    { label: 'Lines', value: (doc.extracted_text?.split('\n').length || 0).toLocaleString(), icon: '📏' },
+                    { label: 'File Type', value: doc.file_type?.toUpperCase() || 'N/A', icon: '📎' },
+                  ].map((stat) => (
+                    <div key={stat.label} className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6">
+                      <span className="text-2xl">{stat.icon}</span>
+                      <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white font-display">{stat.value}</p>
+                      <p className="text-sm text-gray-400 mt-1">{stat.label}</p>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Sidebar — AI Summary */}
+          <div className="lg:col-span-2">
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900"
+              transition={{ delay: 0.2 }}
+              className="sticky top-8 rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden"
             >
-              <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white">📊 Quick Stats</h2>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Characters</span>
-                  <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                    {doc.extracted_text.length.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Words</span>
-                  <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                    {doc.extracted_text.split(/\s+/).filter(Boolean).length.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Lines</span>
-                  <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                    {doc.extracted_text.split('\n').filter(Boolean).length.toLocaleString()}
-                  </span>
+              {/* Summary Header */}
+              <div className="bg-gradient-to-r from-brand-500 to-violet-500 px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white font-display">🤖 AI Summary</h2>
+                  {summary && (
+                    <button onClick={fetchSummary} className="text-xs text-white/80 hover:text-white transition">
+                      Regenerate
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* Summary Content */}
+              <div className="p-6">
+                {doc.status !== 'completed' ? (
+                  <div className="text-center py-8">
+                    <span className="text-3xl">🔒</span>
+                    <p className="mt-2 text-sm text-gray-400">Summary available after OCR completes.</p>
+                  </div>
+                ) : summaryLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-4" style={{ width: `${85 - i * 10}%` }} />
+                    ))}
+                    <p className="text-xs text-gray-400 mt-3">Generating insights...</p>
+                  </div>
+                ) : summary ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert max-h-[500px] overflow-y-auto">
+                    <div className="text-sm leading-relaxed text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                      {summary}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={fetchSummary}
+                    className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-5 py-3.5 text-sm font-semibold text-white hover:shadow-lg hover:shadow-brand-500/25 transition-all"
+                  >
+                    ✨ Generate Summary
+                  </button>
+                )}
+              </div>
             </motion.div>
-          )}
+          </div>
         </div>
       </div>
     </AppLayout>

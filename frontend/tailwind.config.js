@@ -8,30 +8,44 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+        brand: {
+          50: '#f0f4ff',
+          100: '#dbe6ff',
+          200: '#bdd0ff',
+          300: '#8faeff',
+          400: '#5a80ff',
+          500: '#3658ff',
+          600: '#1e38f5',
+          700: '#1528e1',
+          800: '#1822b6',
+          900: '#1a228f',
+          950: '#131657',
         },
-        legal: {
-          gold: '#c9a84c',
-          navy: '#1a2744',
-          cream: '#fefdfb',
+        surface: {
+          DEFAULT: '#fafbfc',
+          dark: '#0a0a0f',
+        },
+        gold: {
+          400: '#e8c547',
+          500: '#d4a843',
         },
       },
       fontFamily: {
-        heading: ['"Playfair Display"', 'serif'],
-        body: ['Inter', 'sans-serif'],
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+        display: ['"Lexend"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.25rem',
+        '4xl': '1.75rem',
+      },
+      boxShadow: {
+        'glow': '0 0 40px -10px rgba(54, 88, 255, 0.3)',
+        'card': '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
+        'elevated': '0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 30px -10px rgba(0,0,0,0.08)',
       },
     },
   },
   plugins: [],
 };
-

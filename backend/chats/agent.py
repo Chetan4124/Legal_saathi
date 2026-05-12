@@ -69,7 +69,7 @@ class LegalAdvisorAgent:
         # Split document into overlapping chunks
         chunks = _simple_split_text(self.document_text, chunk_size=1000, chunk_overlap=200)
 
-        # Use the embedding model that's available in your list
+        # Create embeddings using Gemini
         embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
             google_api_key=settings.GEMINI_API_KEY,
@@ -85,15 +85,51 @@ class LegalAdvisorAgent:
             persist_directory=settings.CHROMA_DB_PATH,
         )
 
-        # Use the newer Gemini model that's available
+        # Initialize Gemini LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3-flash-preview",  # ← CHANGED from gemini-1.5-flash
+            model="gemini-3-flash-preview",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.3,
             convert_system_message_to_human=True,
         )
 
         self.chain = None
+
+    def _extract_text_from_response(self, response) -> str:
+        """Safely extract text from various response formats."""
+        # If it's a plain string
+        if isinstance(response, str):
+            return response
+
+        # If it has a .content attribute
+        if hasattr(response, 'content'):
+            content = response.content
+            # If content is a string
+            if isinstance(content, str):
+                return content
+            # If content is a list of parts (Gemini structured response)
+            if isinstance(content, list):
+                text_parts = []
+                for part in content:
+                    if hasattr(part, 'text'):
+                        text_parts.append(part.text)
+                    elif isinstance(part, dict) and 'text' in part:
+                        text_parts.append(part['text'])
+                    elif isinstance(part, str):
+                        text_parts.append(part)
+                    else:
+                        text_parts.append(str(part))
+                return ''.join(text_parts)
+
+        # If it's a dict with 'content' key
+        if isinstance(response, dict):
+            if 'content' in response:
+                return str(response['content'])
+            if 'text' in response:
+                return str(response['text'])
+
+        # Fallback: convert to string
+        return str(response)
 
     def ask(self, question: str) -> Dict[str, Any]:
         """Answer a question about the document."""
@@ -126,17 +162,19 @@ class LegalAdvisorAgent:
             )
 
             # Call LLM
+            answer = None
             try:
                 response = self.llm.invoke([HumanMessage(content=prompt_text)])
-                answer = response.content if hasattr(response, 'content') else str(response)
-            except Exception:
+                answer = self._extract_text_from_response(response)
+            except Exception as e1:
+                # Fallback: try with plain string
                 try:
                     response = self.llm.invoke(prompt_text)
-                    answer = response.content if hasattr(response, 'content') else str(response)
-                except Exception as e:
+                    answer = self._extract_text_from_response(response)
+                except Exception as e2:
                     return {
                         "answer": "I encountered an error processing your question. Please try again.",
-                        "error": str(e),
+                        "error": str(e2),
                         "success": False
                     }
 
@@ -165,6 +203,11 @@ _agent_cache = {}
 
 def get_agent(document_id: int, document_text: str) -> LegalAdvisorAgent:
     """Get or create an agent for a document."""
+    # Clear stale agent if document text changed (re-upload)
+    if document_id in _agent_cache:
+        if _agent_cache[document_id].document_text != document_text:
+            del _agent_cache[document_id]
+
     if document_id not in _agent_cache:
         _agent_cache[document_id] = LegalAdvisorAgent(document_id, document_text)
     return _agent_cache[document_id]
