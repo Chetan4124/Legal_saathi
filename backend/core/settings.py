@@ -1,6 +1,8 @@
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+import dj_database_url
+import os
 
 # ─────────────────────────────────────────
 # BASE
@@ -12,6 +14,11 @@ SECRET_KEY = config('SECRET_KEY', default='change-me-in-production')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
+# Render automatically sets this — adds the Render domain to ALLOWED_HOSTS
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # ─────────────────────────────────────────
@@ -27,7 +34,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    'rest_framework',           # ← FIXED: was 'rest_framework' (missing 'e')
+    'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
 ]
@@ -48,6 +55,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # ← serves static files on Render
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -80,11 +88,13 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # ─────────────────────────────────────────
 # DATABASE
 # ─────────────────────────────────────────
+# Uses PostgreSQL on Render (via DATABASE_URL env var)
+# Falls back to SQLite locally
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600,
+    )
 }
 
 
@@ -119,6 +129,7 @@ USE_TZ = True
 # ─────────────────────────────────────────
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -161,12 +172,12 @@ SIMPLE_JWT = {
 
 
 # ─────────────────────────────────────────
-# CORS (React frontend access)
+# CORS
 # ─────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-]
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:5173,http://localhost:3000'
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -182,9 +193,17 @@ MAX_UPLOAD_SIZE_MB = 10
 # AI AGENT SETTINGS
 # ─────────────────────────────────────────
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
-
-# FIXED: Properly reads from .env file using the variable name 'GEMINI_API_KEY'
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 
-# ChromaDB will store vector embeddings here
-CHROMA_DB_PATH = str(BASE_DIR / 'chroma_db')
+# ChromaDB path — uses /tmp on Render (ephemeral but works on free tier)
+CHROMA_DB_PATH = os.environ.get('CHROMA_DB_PATH', str(BASE_DIR / 'chroma_db'))
+
+
+# ─────────────────────────────────────────
+# SECURITY (only in production)
+# ─────────────────────────────────────────
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
